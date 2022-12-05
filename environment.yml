@@ -7,6 +7,8 @@ dependencies:
   - pytorch=1.12.1
   - nomkl
   - torchaudio
+  - x264==1!152.20180717
+  - ffmpeg=4.0.2
 prefix: /Users/achan/opt/anaconda3/envs/dsd
 variables:
   PYTORCH_ENABLE_MPS_FALLBACK: 1
