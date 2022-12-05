@@ -121,7 +121,9 @@ class DepthModel():
             except:
                 print(f"  exception encountered, falling back to pure MiDaS")
                 use_adabins = False
-            torch.cuda.empty_cache()
+            
+            if self.device == torch.device("cuda"):
+                torch.cuda.empty_cache()
 
         if self.midas_model is not None:
             # convert image from 0->255 uint8 to 0->1 float for feeding to MiDaS
@@ -142,7 +144,9 @@ class DepthModel():
                 align_corners=False,
             ).squeeze()
             midas_depth = midas_depth.cpu().numpy()
-            torch.cuda.empty_cache()
+
+            if self.device == torch.device("cuda"):
+                torch.cuda.empty_cache()
 
             # MiDaS makes the near values greater, and the far values lesser. Let's reverse that and try to align with AdaBins a bit better.
             midas_depth = np.subtract(50.0, midas_depth)

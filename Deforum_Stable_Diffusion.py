@@ -18,8 +18,14 @@ Notebook by [deforum](https://discord.gg/upmXXsrwZc)
 # !! }}
 #@markdown **NVIDIA GPU**
 import subprocess, os, sys
-sub_p_res = subprocess.run(['nvidia-smi', '--query-gpu=name,memory.total,memory.free', '--format=csv,noheader'], stdout=subprocess.PIPE).stdout.decode('utf-8')
-print(f"{sub_p_res[:-1]}")
+from helpers.device import choose_torch_device
+
+torch_device = choose_torch_device()
+if torch_device == 'cuda':
+  sub_p_res = subprocess.run(['nvidia-smi', '--query-gpu=name,memory.total,memory.free', '--format=csv,noheader'], stdout=subprocess.PIPE).stdout.decode('utf-8')
+  print(f"{sub_p_res[:-1]}")
+else:
+  print(f"using torch device: {torch_device}")
 
 # %%
 # !! {"metadata":{
@@ -116,6 +122,7 @@ import random
 import clip
 from IPython import display
 from types import SimpleNamespace
+from helpers.device import choose_torch_device
 from helpers.save_images import get_output_folder
 from helpers.settings import load_args
 from helpers.render import render_animation, render_input_video, render_image_batch, render_interpolation
@@ -137,7 +144,9 @@ def Root():
     model_checkpoint =  "v1-5-pruned-emaonly.ckpt" #@param ["custom","v1-5-pruned.ckpt","v1-5-pruned-emaonly.ckpt","sd-v1-4-full-ema.ckpt","sd-v1-4.ckpt","sd-v1-3-full-ema.ckpt","sd-v1-3.ckpt","sd-v1-2-full-ema.ckpt","sd-v1-2.ckpt","sd-v1-1-full-ema.ckpt","sd-v1-1.ckpt", "robo-diffusion-v1.ckpt","wd-v1-3-float16.ckpt"]
     custom_config_path = "" #@param {type:"string"}
     custom_checkpoint_path = "" #@param {type:"string"}
-    half_precision = True
+    half_precision = False # must be false if device type is 'mps'
+
+    # device = "cpu" ["cpu", "cuda", "mps"]
     return locals()
 
 root = Root()
@@ -166,8 +175,8 @@ root.model, root.device = load_model(root,
 def DeforumAnimArgs():
 
     #@markdown ####**Animation:**
-    animation_mode = 'None' #@param ['None', '2D', '3D', 'Video Input', 'Interpolation'] {type:'string'}
-    max_frames = 1000 #@param {type:"number"}
+    animation_mode = '2D' #@param ['None', '2D', '3D', 'Video Input', 'Interpolation'] {type:'string'}
+    max_frames = 200 #@param {type:"number"}
     border = 'replicate' #@param ['wrap', 'replicate'] {type:'string'}
 
     #@markdown ####**Motion Parameters:**
@@ -257,8 +266,9 @@ def DeforumArgs():
 
     #@markdown **Sampling Settings**
     seed = -1 #@param
-    sampler = 'dpmpp_2s_a' #@param ["klms","dpm2","dpm2_ancestral","heun","euler","euler_ancestral","plms", "ddim", "dpm_fast", "dpm_adaptive", "dpmpp_2s_a", "dpmpp_2m"]
-    steps = 80 #@param
+    # seed = 3574337679 #@param
+    sampler = 'klms' #@param ["klms","dpm2","dpm2_ancestral","heun","euler","euler_ancestral","plms", "ddim", "dpm_fast", "dpm_adaptive", "dpmpp_2s_a", "dpmpp_2m"]
+    steps = 40 #@param
     scale = 7 #@param
     ddim_eta = 0.0 #@param
     dynamic_threshold = None
@@ -337,12 +347,13 @@ def DeforumArgs():
     clamp_start = 0.2 #@param
     clamp_stop = 0.01 #@param
     grad_inject_timing = list(range(1,10)) #@param
+    # grad_inject_timing = [1] #@param
 
     #@markdown **Speed vs VRAM Settings**
     cond_uncond_sync = True #@param {type:"boolean"}
 
     n_samples = 1 # doesnt do anything
-    precision = 'autocast' 
+    precision = 'full' 
     C = 4
     f = 8
 
@@ -370,6 +381,7 @@ args.strength = max(0.0, min(1.0, args.strength))
 
 # Load clip model if using clip guidance
 if (args.clip_scale > 0) or (args.aesthetics_scale > 0):
+    print("load clip model")
     root.clip_model = clip.load(args.clip_name, jit=False)[0].eval().requires_grad_(False).to(root.device)
     if (args.aesthetics_scale > 0):
         root.aesthetics_model = load_aesthetics_model(args, root)
@@ -391,7 +403,8 @@ elif anim_args.animation_mode == 'Video Input':
 
 # clean up unused memory
 gc.collect()
-torch.cuda.empty_cache()
+if choose_torch_device() == 'cuda':
+    torch.cuda.empty_cache()
 
 # dispatch to appropriate renderer
 if anim_args.animation_mode == '2D' or anim_args.animation_mode == '3D':
@@ -420,8 +433,8 @@ skip_video_for_run_all = True #@param {type: 'boolean'}
 fps = 12 #@param {type:"number"}
 #@markdown **Manual Settings**
 use_manual_settings = False #@param {type:"boolean"}
-image_path = "/content/drive/MyDrive/AI/StableDiffusion/2022-09/20220903000939_%05d.png" #@param {type:"string"}
-mp4_path = "/content/drive/MyDrive/AI/StableDiffusion/2022-09/20220903000939.mp4" #@param {type:"string"}
+image_path = f"{args.outdir}/{args.timestring}_%05d.png" 
+mp4_path = f"{args.outdir}/{args.timestring}.mp4" 
 render_steps = False  #@param {type: 'boolean'}
 path_name_modifier = "x0_pred" #@param ["x0_pred","x"]
 make_gif = False

@@ -3,6 +3,7 @@ from k_diffusion.external import CompVisDenoiser
 from k_diffusion import sampling
 import torch
 
+from .device import choose_torch_device
 
 def sampler_fn(
         c: torch.Tensor,
@@ -11,9 +12,7 @@ def sampler_fn(
         model_wrap: CompVisDenoiser,
         init_latent: Optional[torch.Tensor] = None,
         t_enc: Optional[torch.Tensor] = None,
-        device=torch.device("cpu")
-        if not torch.cuda.is_available()
-        else torch.device("cuda"),
+        device=choose_torch_device(),
         cb: Callable[[Any], None] = None,
         verbose: Optional[bool] = False,
 ) -> torch.Tensor:
@@ -30,7 +29,10 @@ def sampler_fn(
             x = init_latent
     else:
         if len(sigmas) > 0:
-            x = torch.randn([args.n_samples, *shape], device=device) * sigmas[0]
+            if device == 'mps':
+                x = torch.randn([args.n_samples, *shape], device='cpu').to(device) * sigmas[0]
+            else:
+                x = torch.randn([args.n_samples, *shape], device=device) * sigmas[0]
         else:
             x = torch.zeros([args.n_samples, *shape], device=device)
     sampler_args = {

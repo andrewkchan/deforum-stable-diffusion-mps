@@ -1,9 +1,11 @@
 import os
 import torch
 
+from .device import choose_torch_device
+
 # Decodes the image without passing through the upscaler. The resulting image will be the same size as the latent
 # Thanks to Kevin Turner (https://github.com/keturn) we have a shortcut to look at the decoded image!
-def make_linear_decode(model_version, device='cuda:0'):
+def make_linear_decode(model_version, device=choose_torch_device()):
     v1_4_rgb_latent_factors = [
         #   R       G       B
         [ 0.298,  0.207,  0.208],  # L1
@@ -183,10 +185,9 @@ def load_model(root, load_on_run_all=True, check_sha256=True):
         except:
             print("..could not verify model integrity")
 
-    def load_model_from_config(config, ckpt, verbose=False, device='cuda', half_precision=True,print_flag=False):
-        map_location = "cuda" # ["cpu", "cuda"]
+    def load_model_from_config(config, ckpt, verbose=False, device=choose_torch_device(), half_precision=True,print_flag=False):
         print(f"..loading model")
-        pl_sd = torch.load(ckpt, map_location=map_location)
+        pl_sd = torch.load(ckpt, map_location='cpu')
         if "global_step" in pl_sd:
             if print_flag:
                 print(f"Global Step: {pl_sd['global_step']}")
@@ -211,7 +212,7 @@ def load_model(root, load_on_run_all=True, check_sha256=True):
     if load_on_run_all and ckpt_valid:
         local_config = OmegaConf.load(f"{ckpt_config_path}")
         model = load_model_from_config(local_config, f"{ckpt_path}", half_precision=root.half_precision)
-        device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        device = choose_torch_device()
         model = model.to(device)
 
     autoencoder_version = "sd-v1" #TODO this will be different for different models

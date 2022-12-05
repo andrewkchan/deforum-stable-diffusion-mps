@@ -15,6 +15,7 @@ from torch.utils import data
 import torchvision.transforms as transforms
 from tqdm import tqdm
 
+from helpers.device import choose_torch_device
 from CLIP import clip
 
 
@@ -69,7 +70,7 @@ def main():
     if args.device:
         device = torch.device(device)
     else:
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        device = torch.device(choose_torch_device())
     print('Using device:', device)
 
     clip_model, clip_tf = clip.load(args.clip_model, device=device, jit=False)

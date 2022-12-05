@@ -9,12 +9,14 @@ import torch
 from simulacra_fit_linear_model import AestheticMeanPredictionLinearModel
 from CLIP import clip
 
+from .device import choose_torch_device
+
 parser = ArgumentParser()
 parser.add_argument("directory")
 parser.add_argument("-t", "--top-n", default=50)
 args = parser.parse_args()
 
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+device = torch.device(choose_torch_device())
 
 clip_model_name = 'ViT-B/16'
 clip_model = clip.load(clip_model_name, jit=False, device=device)[0]

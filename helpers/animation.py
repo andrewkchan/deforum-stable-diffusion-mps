@@ -10,6 +10,8 @@ import pathlib
 import os
 import pandas as pd
 
+from .device import choose_torch_device
+
 def check_is_number(value):
     float_pattern = r'^(?=.)([+-]?([0-9]*)(\.([0-9]+))?)$'
     return re.match(float_pattern, value)
@@ -162,7 +164,7 @@ def warpMatrix(W, H, theta, phi, gamma, scale, fV):
 
     return M33, sideLength
 
-def anim_frame_warp(prev, args, anim_args, keys, frame_idx, depth_model=None, depth=None, device='cuda'):
+def anim_frame_warp(prev, args, anim_args, keys, frame_idx, depth_model=None, depth=None, device=choose_torch_device()):
     if isinstance(prev, np.ndarray):
         prev_img_cv2 = prev
     else:
@@ -226,7 +228,8 @@ def anim_frame_warp_3d(device, prev_img_cv2, depth, anim_args, keys, frame_idx):
     ]
     rot_mat = p3d.euler_angles_to_matrix(torch.tensor(rotate_xyz, device=device), "XYZ").unsqueeze(0)
     result = transform_image_3d(device, prev_img_cv2, depth, rot_mat, translate_xyz, anim_args)
-    torch.cuda.empty_cache()
+    if device == 'cuda':
+        torch.cuda.empty_cache()
     return result
 
 def transform_image_3d(device, prev_img_cv2, depth_tensor, rot_mat, translate, anim_args):

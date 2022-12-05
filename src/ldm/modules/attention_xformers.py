@@ -8,7 +8,7 @@ from einops import rearrange, repeat
 from typing import Any, Optional
 import xformers
 import xformers.ops
-
+import psutil
 
 from ldm.modules.diffusionmodules.util import checkpoint
 
@@ -186,31 +186,38 @@ class CrossAttention(nn.Module):
 
         r1 = torch.zeros(q.shape[0], q.shape[1], v.shape[2], device=q.device)
 
-        stats = torch.cuda.memory_stats(q.device)
-        mem_active = stats['active_bytes.all.current']
-        mem_reserved = stats['reserved_bytes.all.current']
-        mem_free_cuda, _ = torch.cuda.mem_get_info(torch.cuda.current_device())
-        mem_free_torch = mem_reserved - mem_active
-        mem_free_total = mem_free_cuda + mem_free_torch
+        if q.device.type == 'cuda':
+            stats = torch.cuda.memory_stats(q.device)
+            mem_active = stats['active_bytes.all.current']
+            mem_reserved = stats['reserved_bytes.all.current']
+            mem_free_cuda, _ = torch.cuda.mem_get_info(torch.cuda.current_device())
+            mem_free_torch = mem_reserved - mem_active
+            mem_free_total = mem_free_cuda + mem_free_torch
 
-        gb = 1024 ** 3
-        tensor_size = q.shape[0] * q.shape[1] * k.shape[1] * q.element_size()
-        modifier = 3 if q.element_size() == 2 else 2.5
-        mem_required = tensor_size * modifier
-        steps = 1
+            gb = 1024 ** 3
+            tensor_size = q.shape[0] * q.shape[1] * k.shape[1] * q.element_size()
+            modifier = 3 if q.element_size() == 2 else 2.5
+            mem_required = tensor_size * modifier
+            steps = 1
 
 
-        if mem_required > mem_free_total:
-            steps = 2**(math.ceil(math.log(mem_required / mem_free_total, 2)))
-            # print(f"Expected tensor size:{tensor_size/gb:0.1f}GB, cuda free:{mem_free_cuda/gb:0.1f}GB "
-            #      f"torch free:{mem_free_torch/gb:0.1f} total:{mem_free_total/gb:0.1f} steps:{steps}")
+            if mem_required > mem_free_total:
+                steps = 2**(math.ceil(math.log(mem_required / mem_free_total, 2)))
+                # print(f"Expected tensor size:{tensor_size/gb:0.1f}GB, cuda free:{mem_free_cuda/gb:0.1f}GB "
+                #      f"torch free:{mem_free_torch/gb:0.1f} total:{mem_free_total/gb:0.1f} steps:{steps}")
 
-        if steps > 64:
-            max_res = math.floor(math.sqrt(math.sqrt(mem_free_total / 2.5)) / 8) * 64
-            raise RuntimeError(f'Not enough memory, use lower resolution (max approx. {max_res}x{max_res}). '
-                               f'Need: {mem_required/64/gb:0.1f}GB free, Have:{mem_free_total/gb:0.1f}GB free')
+            if steps > 64:
+                max_res = math.floor(math.sqrt(math.sqrt(mem_free_total / 2.5)) / 8) * 64
+                raise RuntimeError(f'Not enough memory, use lower resolution (max approx. {max_res}x{max_res}). '
+                                f'Need: {mem_required/64/gb:0.1f}GB free, Have:{mem_free_total/gb:0.1f}GB free')
 
-        slice_size = q.shape[1] // steps if (q.shape[1] % steps) == 0 else q.shape[1]
+            slice_size = q.shape[1] // steps if (q.shape[1] % steps) == 0 else q.shape[1]
+        else:
+            if psutil.virtual_memory().available / (1024**3) < 12:
+                slice_size = 1
+            else:
+                slice_size = min(q.shape[1], math.floor(2**30 / (q.shape[0] * q.shape[1])))
+                
         for i in range(0, q.shape[1], slice_size):
             end = i + slice_size
             s1 = einsum('b i d, b j d -> b i j', q[:, i:end], k) * self.scale

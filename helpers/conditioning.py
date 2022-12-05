@@ -9,6 +9,8 @@ from IPython import display
 from sklearn.cluster import KMeans
 import torchvision.transforms.functional as TF
 
+from helpers.device import choose_torch_device
+
 ###
 # Loss functions
 ###
@@ -144,7 +146,7 @@ def get_color_palette(root, n_colors, target, verbose=False):
     # color_list = color_list[color_indexes]
     return color_list, color_counts
 
-def make_rgb_color_match_loss(root, target, n_colors, ignore_sat_weight=None, img_shape=None, device='cuda:0'):
+def make_rgb_color_match_loss(root, target, n_colors, ignore_sat_weight=None, img_shape=None, device=choose_torch_device()):
     """
     target (tensor): Image sample (values from -1 to 1) to extract the color palette
     n_colors (int): Number of colors in the color palette
