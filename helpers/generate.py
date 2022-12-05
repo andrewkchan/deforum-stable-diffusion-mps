@@ -24,9 +24,13 @@ from .model_wrap import CFGDenoiserWithGrad
 from .load_images import load_img, load_mask_latent, prepare_mask, prepare_overlay_mask
 
 def add_noise(sample: torch.Tensor, noise_amt: float) -> torch.Tensor:
-    return sample + torch.randn(sample.shape, device=sample.device) * noise_amt
+    if sample.device.type == 'mps':
+        return sample + torch.randn(sample.shape, device='cpu').to(torch.device('mps')) * noise_amt
+    else:
+        return sample + torch.randn(sample.shape, device=sample.device) * noise_amt
 
 def generate(args, root, frame = 0, return_latent=False, return_sample=False, return_c=False):
+    # print(f"\n===========\ngenerate\n-------------\n{vars(args)}\n===========\n")
     seed_everything(args.seed)
     os.makedirs(args.outdir, exist_ok=True)
 
@@ -37,6 +41,8 @@ def generate(args, root, frame = 0, return_latent=False, return_sample=False, re
     assert prompt is not None
     data = [batch_size * [prompt]]
     precision_scope = autocast if args.precision == "autocast" else nullcontext
+    if root.device in ['mps', 'cpu']:
+        precision_scope = nullcontext # have to use f32 on mps
 
     init_latent = None
     mask_image = None
@@ -44,7 +50,7 @@ def generate(args, root, frame = 0, return_latent=False, return_sample=False, re
     if args.init_latent is not None:
         init_latent = args.init_latent
     elif args.init_sample is not None:
-        with precision_scope("cuda"):
+        with precision_scope(root.device):
             init_latent = root.model.get_first_stage_encoding(root.model.encode_first_stage(args.init_sample))
     elif args.use_init and args.init_image != None and args.init_image != '':
         init_image, mask_image = load_img(args.init_image, 
@@ -52,7 +58,7 @@ def generate(args, root, frame = 0, return_latent=False, return_sample=False, re
                                           use_alpha_as_mask=args.use_alpha_as_mask)
         init_image = init_image.to(root.device)
         init_image = repeat(init_image, '1 ... -> b ...', b=batch_size)
-        with precision_scope("cuda"):
+        with precision_scope(root.device):
             init_latent = root.model.get_first_stage_encoding(root.model.encode_first_stage(init_image))  # move to latent space        
 
     if not args.use_init and args.strength > 0 and args.strength_0_no_init:
@@ -84,6 +90,7 @@ def generate(args, root, frame = 0, return_latent=False, return_sample=False, re
     assert not ( (args.use_mask and args.overlay_mask) and (args.init_sample is None and init_image is None)), "Need an init image when use_mask == True and overlay_mask == True"
 
     # Init MSE loss image
+    print("# Init MSE loss image")
     init_mse_image = None
     if args.init_mse_scale and args.init_mse_image != None and args.init_mse_image != '':
         init_mse_image, mask_image = load_img(args.init_mse_image,
@@ -97,6 +104,7 @@ def generate(args, root, frame = 0, return_latent=False, return_sample=False, re
     t_enc = int((1.0-args.strength) * args.steps)
 
     # Noise schedule for the k-diffusion samplers (used for masking)
+    print("# Noise schedule for the k-diffusion samplers (used for masking)")
     k_sigmas = model_wrap.get_sigmas(args.steps)
     args.clamp_schedule = dict(zip(k_sigmas.tolist(), np.linspace(args.clamp_start,args.clamp_stop,args.steps+1)))
     k_sigmas = k_sigmas[len(k_sigmas)-t_enc-1:]
@@ -113,6 +121,7 @@ def generate(args, root, frame = 0, return_latent=False, return_sample=False, re
         colormatch_image = None
 
     # Loss functions
+    print("# Loss functions")
     if args.init_mse_scale != 0:
         if args.decode_method == "linear":
             mse_loss_fn = make_mse_loss(root.model.linear_decode(root.model.get_first_stage_encoding(root.model.encode_first_stage(init_mse_image.to(root.device)))))
@@ -188,10 +197,12 @@ def generate(args, root, frame = 0, return_latent=False, return_sample=False, re
                                     grad_inject_timing_fn=grad_inject_timing_fn, # option to use grad in only a few of the steps
                                     grad_consolidate_fn=None, # function to add grad to image fn(img, grad, sigma)
                                     verbose=False)
+    if root.device in ['mps']:
+        cfg_model = cfg_model.to(torch.float32).to(torch.device('mps')) # have to use f32 on mps
 
     results = []
     with torch.no_grad():
-        with precision_scope("cuda"):
+        with precision_scope(root.device):
             with root.model.ema_scope():
                 for prompts in data:
                     if isinstance(prompts, tuple):
@@ -209,6 +220,7 @@ def generate(args, root, frame = 0, return_latent=False, return_sample=False, re
                         c = args.init_c
 
                     if args.sampler in ["klms","dpm2","dpm2_ancestral","heun","euler","euler_ancestral", "dpm_fast", "dpm_adaptive", "dpmpp_2s_a", "dpmpp_2m"]:
+                        print(f"\nsampling with {args.sampler}...")
                         samples = sampler_fn(
                             c=c, 
                             uc=uc, 
@@ -224,7 +236,10 @@ def generate(args, root, frame = 0, return_latent=False, return_sample=False, re
                         if init_latent is not None and args.strength > 0:
                             z_enc = sampler.stochastic_encode(init_latent, torch.tensor([t_enc]*batch_size).to(root.device))
                         else:
-                            z_enc = torch.randn([args.n_samples, args.C, args.H // args.f, args.W // args.f], device=root.device)
+                            if root.device == 'mps':
+                                z_enc = torch.randn([args.n_samples, args.C, args.H // args.f, args.W // args.f], device='cpu').to(torch.device('mps'))
+                            else:
+                                z_enc = torch.randn([args.n_samples, args.C, args.H // args.f, args.W // args.f], device=root.device)
                         if args.sampler == 'ddim':
                             samples = sampler.decode(z_enc, 
                                                      c, 

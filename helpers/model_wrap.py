@@ -119,6 +119,7 @@ class CFGDenoiserWithGrad(CompVisDenoiser):
             x_in = torch.cat([x] * 2)
             sigma_in = torch.cat([sigma] * 2)
 
+            # import pdb; pdb.set_trace()
             denoised = self.inner_model(x_in, sigma_in, cond=cond, **kwargs)
             uncond_x0, cond_x0 = denoised.chunk(2)
             x0_pred = uncond_x0 + (cond_x0 - uncond_x0) * cond_scale

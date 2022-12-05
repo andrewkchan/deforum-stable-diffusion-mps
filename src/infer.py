@@ -12,6 +12,7 @@ import model_io
 import utils
 from adabins import UnetAdaptiveBins
 
+from helpers.device import choose_torch_device
 
 def _is_pil_image(img):
     return isinstance(img, Image.Image)
@@ -64,7 +65,7 @@ class ToTensor(object):
 
 
 class InferenceHelper:
-    def __init__(self, models_path, dataset='nyu', device='cuda:0'):
+    def __init__(self, models_path, dataset='nyu', device=choose_torch_device()):
         self.toTensor = ToTensor()
         self.device = device
         if dataset == 'nyu':

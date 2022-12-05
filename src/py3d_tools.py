@@ -505,6 +505,9 @@ class Transform3d:
 
     def cuda(self) -> "Transform3d":
         return self.to("cuda")
+    
+    def mps(self) -> "Transform3d":
+        return self.to("mps")
 
 class Translate(Transform3d):
     def __init__(
@@ -745,6 +748,9 @@ class TensorProperties(nn.Module):
     # pyre-fixme[14]: `cuda` overrides method defined in `Module` inconsistently.
     def cuda(self, device: Optional[int] = None) -> "TensorProperties":
         return self.to(f"cuda:{device}" if device is not None else "cuda")
+    
+    def mps(self) -> "TensorProperties":
+        return self.to("mps")
 
     def clone(self, other) -> "TensorProperties":
         """
@@ -1153,7 +1159,7 @@ class CamerasBase(TensorProperties):
 
         kwargs = {}
 
-        if not isinstance(index, (int, list, torch.LongTensor, torch.cuda.LongTensor)):
+        if not isinstance(index, (int, list, torch.LongTensor, torch.LongTensor)):
             msg = "Invalid index type, expected int, List[int] or torch.LongTensor; got %r"
             raise ValueError(msg % type(index))
 

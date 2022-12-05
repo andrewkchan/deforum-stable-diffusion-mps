@@ -15,12 +15,16 @@ numexpr
 omegaconf
 opencv-python
 pandas
+psutil
 pytorch_lightning==1.7.7
 resize-right
 scikit-image
 scikit-learn
 timm
+torch
+torchaudio
 torchdiffeq
+torchvision
 transformers==4.19.2
 albumentations
 more_itertools

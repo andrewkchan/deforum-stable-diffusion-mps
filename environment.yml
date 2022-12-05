@@ -1,0 +1,12 @@
+name: dsd
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+  - torchvision
+  - pytorch=1.12.1
+  - nomkl
+  - torchaudio
+prefix: /Users/achan/opt/anaconda3/envs/dsd
+variables:
+  PYTORCH_ENABLE_MPS_FALLBACK: 1
