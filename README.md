@@ -22,12 +22,7 @@ conda install -c anaconda git -y
 
 ## Getting Started
 1. open anaconda powershell (on Windows) or terminal (Linux) and navigate to install location
-2. clone the github repository:
-```
-git clone https://github.com/deforum-art/deforum-stable-diffusion.git
-cd deforum-stable-diffusion
-
-```
+2. clone this github repository and cd into it
 3. create anaconda environment:
 ```
 conda create -f environment.yml
